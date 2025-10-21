@@ -1,0 +1,632 @@
+# Yaalee Post — Replit One‑Shot Build Plan
+
+**Goal:** Build a production‑ready, multilingual Ethiopian news site using **Next.js 14+**, **Sanity (Growth)** for editorial CMS, **Supabase (Postgres)** for operational data, and deploy via **Replit → GitHub → Vercel**. Include **Supabase MCP (full read/write on Dev)** to create schema and keep **SQL migrations in-repo**.
+
+---
+
+## 0) Outcomes
+
+* Multilingual (EN default, OM, AM) site with `/[lang]/…` routes.
+* Sanity Growth for articles/authors/sections/tags/media, releases/comments.
+* Supabase for users/profiles/roles, ad campaigns, and ops data.
+* SQL migrations in `/migrations`, Node runner in `/scripts/run-migrations.js`.
+* World‑class SEO: JSON‑LD (NewsArticle/VideoObject/Organization/Breadcrumb), `hreflang`, canonical, robots, **Standard sitemap** + **News sitemap (48h)**.
+* GAM/AdSense‑ready AdSlots with fixed heights + lazy loading (CLS‑safe).
+* On‑demand revalidation (Sanity webhook → Next route).
+* CI/CD: Replit dev → push to GitHub → Vercel preview/prod.
+
+---
+
+## 1) Repo Skeleton
+
+Create the following:
+
+```
+/app
+/components
+/lib
+/migrations
+/public
+/scripts
+/styles
+sanity.config.ts
+next-sitemap.config.js
+README.md
+```
+
+---
+
+## 2) Packages to Install
+
+Run in the project shell:
+
+```
+npm i next react react-dom typescript zod tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+npm i next-sitemap
+npm i @sanity/client next-sanity @portabletext/react
+npm i @supabase/supabase-js pg glob
+npm i @vercel/analytics
+npm i class-variance-authority lucide-react
+npm i -D eslint prettier
+```
+
+---
+
+## 3) Environment Variables (Dev)
+
+Add these secrets in Replit (and later in Vercel):
+
+```
+NEXT_PUBLIC_SITE_URL=https://your-dev-domain.example
+NEXT_PUBLIC_SANITY_PROJECT_ID=XXXX
+SANITY_API_DATASET=production
+SANITY_API_READ_TOKEN=XXXX
+SANITY_API_WRITE_TOKEN=XXXX
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=XXXX
+SUPABASE_DB_URL_SERVICE_ROLE=postgres://service-role@host/db?opts
+REVALIDATE_SECRET=choose-a-strong-string
+GA4_MEASUREMENT_ID=G-XXXX (optional)
+CLOUDINARY_URL=cloudinary://key:secret@cloud-name (optional)
+```
+
+> **Note:** `SUPABASE_DB_URL_SERVICE_ROLE` is **server-only**; never expose in the browser.
+
+---
+
+## 4) Supabase MCP (Dev) — Full Read/Write
+
+1. Open an MCP client in Replit and attach:
+
+   * **Server URL:** `https://mcp.supabase.com/mcp`
+2. In the browser OAuth flow: sign into Supabase → choose your **Dev** project.
+3. Keep **write enabled** (not read‑only) and **scope** to the selected project.
+4. Confirm you have the project ref/DB connection set in Replit secrets.
+
+> **Production note:** Do **not** attach MCP to Production. Use migrations/CI for Staging/Prod.
+
+---
+
+## 5) Database Schema & Migrations
+
+Create `/migrations/001_init.sql` with the following content:
+
+```sql
+-- Enable extensions (Supabase: pgcrypto available)
+create extension if not exists "pgcrypto";
+
+-- USERS/ROLES
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role text not null default 'contributor', -- contributor|writer|editor|admin
+  created_at timestamptz not null default now()
+);
+
+-- AUTHORS (public bylines)
+create table if not exists public.authors (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text unique not null,
+  bio text,
+  headshot_url text,
+  social jsonb default '{}'::jsonb
+);
+
+-- SECTIONS & TAGS
+create table if not exists public.sections (
+  id serial primary key,
+  slug text unique not null,
+  name text not null
+);
+create table if not exists public.tags (
+  id serial primary key,
+  slug text unique not null,
+  name text not null
+);
+
+-- MEDIA
+create table if not exists public.media_assets (
+  id uuid primary key default gen_random_uuid(),
+  url text not null,
+  kind text not null check (kind in ('image','video')),
+  width int,
+  height int,
+  credit text,
+  caption text,
+  alt text,
+  meta jsonb default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- ARTICLES
+create table if not exists public.articles (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  status text not null check (status in ('draft','review','scheduled','published','archived')),
+  section_id int references public.sections(id) on delete set null,
+  featured_media_id uuid references public.media_assets(id) on delete set null,
+  language text not null, -- 'en'|'om'|'am'|...
+  allow_comments boolean not null default false,
+  published_at timestamptz,
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  updated_by uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+-- TRANSLATIONS (one row per lang)
+create table if not exists public.article_translations (
+  id uuid primary key default gen_random_uuid(),
+  article_id uuid not null references public.articles(id) on delete cascade,
+  lang text not null,
+  title text not null,
+  summary text,
+  body jsonb not null, -- your rich text JSON
+  slug text not null,
+  unique (article_id, lang),
+  unique (lang, slug)
+);
+
+-- MULTI-BYLINE
+create table if not exists public.article_authors (
+  article_id uuid references public.articles(id) on delete cascade,
+  author_id uuid references public.authors(id) on delete cascade,
+  ord smallint not null default 1,
+  primary key (article_id, author_id)
+);
+
+-- TAGGING
+create table if not exists public.article_tags (
+  article_id uuid references public.articles(id) on delete cascade,
+  tag_id int references public.tags(id) on delete cascade,
+  primary key (article_id, tag_id)
+);
+
+-- REVISIONS / CORRECTIONS
+create table if not exists public.article_revisions (
+  id bigserial primary key,
+  article_id uuid references public.articles(id) on delete cascade,
+  note text,
+  snapshot jsonb,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+
+-- DIRECT-SOLD ADS
+create table if not exists public.ad_campaigns (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  placement_key text not null, -- matches frontend slot ids
+  start_date date,
+  end_date date,
+  targeting jsonb default '{}'::jsonb,
+  creative jsonb default '{}'::jsonb,
+  active boolean not null default true
+);
+
+-- INDEXES
+create index if not exists idx_articles_published_at on public.articles (published_at desc);
+create index if not exists idx_articles_status on public.articles (status);
+create index if not exists idx_translations_lang_slug on public.article_translations (lang, slug);
+create index if not exists idx_article_authors_article_ord on public.article_authors (article_id, ord);
+
+-- === RLS ===
+alter table public.profiles              enable row level security;
+alter table public.authors               enable row level security;
+alter table public.sections              enable row level security;
+alter table public.tags                  enable row level security;
+alter table public.media_assets          enable row level security;
+alter table public.articles              enable row level security;
+alter table public.article_translations  enable row level security;
+alter table public.article_authors       enable row level security;
+alter table public.article_tags          enable row level security;
+alter table public.article_revisions     enable row level security;
+alter table public.ad_campaigns          enable row level security;
+
+-- Helper view for role
+create or replace view public.me as
+select u.id as user_id, coalesce(p.role,'contributor') as role
+from auth.users u left join public.profiles p on p.user_id=u.id
+where u.id = auth.uid();
+
+-- PUBLIC READ policies (published only)
+create policy "public read sections" on public.sections for select using (true);
+create policy "public read tags"     on public.tags     for select using (true);
+create policy "public read media"    on public.media_assets for select using (true);
+
+create policy "public read published articles"
+on public.articles for select using (status = 'published');
+
+create policy "public read published translations"
+on public.article_translations for select using (
+  exists (select 1 from public.articles a where a.id = article_id and a.status='published')
+);
+
+-- STAFF WRITE policies
+create policy "staff write articles"
+on public.articles for all to authenticated
+using (exists (select 1 from public.me where role in ('writer','editor','admin')))
+with check (exists (select 1 from public.me where role in ('writer','editor','admin')));
+
+create policy "staff write translations"
+on public.article_translations for all to authenticated
+using (exists (select 1 from public.me where role in ('writer','editor','admin')))
+with check (exists (select 1 from public.me where role in ('writer','editor','admin')));
+
+create policy "staff write media"
+on public.media_assets for all to authenticated
+using (exists (select 1 from public.me where role in ('writer','editor','admin')))
+with check (exists (select 1 from public.me where role in ('writer','editor','admin')));
+
+create policy "staff write taxonomy"
+on public.tags for all to authenticated
+using (exists (select 1 from public.me where role in ('editor','admin')))
+with check (exists (select 1 from public.me where role in ('editor','admin')));
+
+-- SEED (sections/tags)
+insert into public.sections (slug, name) values
+  ('news','News'),('business','Business'),('tech','Tech'),
+  ('culture','Culture'),('opinion','Opinion'),('explainers','Explainers')
+on conflict (slug) do nothing;
+
+insert into public.tags (slug, name) values
+  ('politics','Politics'),('economy','Economy'),('innovation','Innovation'),
+  ('ethiopia','Ethiopia'),('diaspora','Diaspora')
+on conflict (slug) do nothing;
+```
+
+### Migration Runner — `/scripts/run-migrations.js`
+
+```js
+const fs = require('fs');
+const { Client } = require('pg');
+const glob = require('glob');
+
+const url = process.env.SUPABASE_DB_URL_SERVICE_ROLE;
+if (!url) {
+  console.error('Missing SUPABASE_DB_URL_SERVICE_ROLE');
+  process.exit(1);
+}
+
+(async () => {
+  const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  await client.connect();
+
+  await client.query(`
+    create table if not exists _migrations (
+      id serial primary key,
+      filename text unique not null,
+      executed_at timestamptz not null default now()
+    );`);
+
+  const files = glob.sync('migrations/*.sql').sort();
+  for (const file of files) {
+    const done = await client.query('select 1 from _migrations where filename=$1', [file]);
+    if (done.rowCount) { console.log('Already applied:', file); continue; }
+
+    const sql = fs.readFileSync(file, 'utf8');
+    console.log('Applying:', file);
+    await client.query('begin');
+    try {
+      await client.query(sql);
+      await client.query('insert into _migrations(filename) values ($1)', [file]);
+      await client.query('commit');
+    } catch (e) {
+      await client.query('rollback');
+      console.error('Failed migration:', file, e.message);
+      process.exit(1);
+    }
+  }
+
+  await client.end();
+  console.log('All migrations applied.');
+})();
+```
+
+Add to `package.json`:
+
+```json
+{
+  "scripts": { "migrate": "node scripts/run-migrations.js" }
+}
+```
+
+**Apply migrations (Dev):**
+
+```
+npm run migrate
+```
+
+---
+
+## 6) Sanity (Growth) Setup
+
+* Create a Sanity project (Growth plan). Enable locales: `en`, `om`, `am`.
+* Add `sanity.config.ts` and `/schemas` (define `article`, `author`, `section`, `tag`, localized fields or i18n plugin). Use Portable Text for article body.
+* Add `/lib/sanity.ts` with a typed client and a few GROQ queries.
+* Optionally embed Studio at `/app/studio/route.tsx` or host separately.
+
+*(You can add the exact schema later; this plan assumes Sanity is the editorial source.)*
+
+---
+
+## 7) Next.js Routing & Pages
+
+* Use App Router with segment: `/[lang]` (EN default; support OM/AM).
+* Pages:
+
+  * `/[lang]` (Home): lead story, latest grid, section rails.
+  * `/[lang]/news/[slug]` (Article): title, dek, authors, timestamps, dateline, body, related, corrections.
+  * `/[lang]/section/[slug]`, `/[lang]/tag/[slug]`, `/[lang]/author/[slug]`.
+  * Trust pages: `/about`, `/editorial-standards`, `/corrections`, `/contact`, `/privacy`, `/terms` (link in footer; localize as ready).
+* Add `alternates.hreflang` (en/om/am + x‑default) and canonical URLs.
+
+---
+
+## 8) News Sitemap (48h) — `app/news-sitemap.xml/route.ts`
+
+```ts
+import { NextResponse } from 'next/server';
+import { createClient } from '@sanity/client';
+
+const sanity = createClient({
+  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
+  dataset: process.env.SANITY_API_DATASET!,
+  apiVersion: '2025-01-01',
+  useCdn: true,
+});
+
+export const revalidate = 60; // refresh sitemap every minute
+
+export async function GET() {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const items: { slug: string; lang: string; title: string; publishedAt: string }[] =
+    await sanity.fetch(
+      `*[_type=="article" && defined(publishedAt) && publishedAt >= $since] | order(publishedAt desc)[0...1000]{
+        "slug": slug.current,
+        "lang": coalesce(language,"en"),
+        title,
+        "publishedAt": publishedAt
+      }`,
+      { since }
+    );
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+          xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+    ${items.map(a => `
+      <url>
+        <loc>${process.env.NEXT_PUBLIC_SITE_URL}/${a.lang}/news/${a.slug}</loc>
+        <news:news>
+          <news:publication>
+            <news:name>Yaalee Post</news:name>
+            <news:language>${a.lang}</news:language>
+          </news:publication>
+          <news:publication_date>${a.publishedAt}</news:publication_date>
+          <news:title>${escapeXml(a.title || '')}</news:title>
+        </news:news>
+      </url>`).join('')}
+  </urlset>`;
+
+  return new NextResponse(xml, { headers: { 'Content-Type': 'application/xml' } });
+}
+
+function escapeXml(s: string) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+```
+
+---
+
+## 9) Standard Sitemap + Robots — `next-sitemap.config.js`
+
+```js
+/** @type {import('next-sitemap').IConfig} */
+module.exports = {
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  generateRobotsTxt: true,
+  exclude: ['/studio/*', '/api/*', '/news-sitemap.xml'],
+  robotsTxtOptions: {
+    additionalSitemaps: [`${process.env.NEXT_PUBLIC_SITE_URL}/news-sitemap.xml`],
+  },
+};
+```
+
+Optionally add `public/robots.txt` if you need custom directives.
+
+---
+
+## 10) JSON‑LD Helpers — `lib/seo.ts`
+
+```ts
+export function newsArticleJsonLd(p: {
+  url: string; title: string; images: string[]; datePublished: string;
+  dateModified?: string; authors: { name: string; url?: string }[];
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    mainEntityOfPage: p.url,
+    headline: p.title,
+    image: p.images,
+    datePublished: p.datePublished,
+    dateModified: p.dateModified ?? p.datePublished,
+    author: p.authors.map(a => ({ '@type': 'Person', name: a.name, url: a.url })),
+    publisher: {
+      '@type': 'Organization',
+      name: 'Yaalee Post',
+      logo: { '@type': 'ImageObject', url: `${process.env.NEXT_PUBLIC_SITE_URL}/logo-512.png` }
+    }
+  };
+}
+
+export function orgJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Yaalee Post',
+    url: process.env.NEXT_PUBLIC_SITE_URL,
+    logo: `${process.env.NEXT_PUBLIC_SITE_URL}/logo-512.png`
+  };
+}
+
+export function breadcrumbJsonLd(items: { name: string; item: string }[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({
+      '@type': 'ListItem', position: i + 1, name: it.name, item: it.item
+    }))
+  };
+}
+```
+
+Use on pages:
+
+```tsx
+<script type="application/ld+json" suppressHydrationWarning
+  dangerouslySetInnerHTML={{ __html: JSON.stringify(newsArticleJsonLd(props)) }} />
+```
+
+---
+
+## 11) Revalidation Route — `app/api/revalidate/route.ts`
+
+```ts
+import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath, revalidateTag } from 'next/cache';
+
+export async function POST(req: NextRequest) {
+  const secret = req.headers.get('x-revalidate-secret');
+  if (secret !== process.env.REVALIDATE_SECRET) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const { slug, lang, tags = [] } = body;
+
+  if (slug && lang) revalidatePath(`/${lang}/news/${slug}`);
+  for (const t of tags) revalidateTag(t);
+
+  return NextResponse.json({ revalidated: true });
+}
+```
+
+**Sanity webhook:** on publish/update, POST `{ slug, lang, tags }` with header `x-revalidate-secret: <REVALIDATE_SECRET>`.
+
+---
+
+## 12) Ad Slot Component — `components/AdSlot.tsx`
+
+```tsx
+'use client';
+import { useEffect, useRef } from 'react';
+
+type Props = { id: string; minHeight: number; render?: () => void };
+export default function AdSlot({ id, minHeight, render }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        render?.(); // inject ad tag here (GAM/AdSense)
+        io.disconnect();
+      }
+    }, { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [render]);
+
+  return <div id={id} ref={ref} style={{ minHeight }} className="w-full flex justify-center items-center my-6" />;
+}
+```
+
+Usage example:
+
+```tsx
+<AdSlot id="YALEE_TOP" minHeight={250} render={() => { /* GAM tag insert */ }} />
+```
+
+---
+
+## 13) next-sitemap & Robots
+
+* `next-sitemap.config.js` already provided. After build, it generates `/sitemap.xml` and `/robots.txt`.
+* Ensure `robots.txt` includes both standard and news sitemaps.
+
+---
+
+## 14) Feeds & Compliance
+
+* Add simple RSS/Atom under `/feeds` later if needed.
+* Add `public/ads.txt` and `public/app-ads.txt` placeholders; fill with your GAM/AdSense lines.
+* Footer links: About, Editorial Standards, Corrections, Contact, Privacy, Terms.
+
+---
+
+## 15) Performance (CWV) Checklist
+
+* `next/image` (or Cloudinary loader), AVIF/WebP, width/height set, only LCP hero eager.
+* Fonts via `next/font`, `display: swap`.
+* Preconnect to image CDN and ad domains.
+* Fixed ad slot heights; lazy load scripts.
+* Targets: **LCP < 2.5s**, **INP < 200ms**, **CLS < 0.1** on Home, Article, Section.
+
+---
+
+## 16) Deployment (GitHub → Vercel)
+
+1. Push repo to GitHub from Replit.
+2. Import in Vercel; set Node ≥ 18; Build: `next build`.
+3. Add env vars in Vercel (same as Dev, but with staging/prod values).
+4. **Do not** run migrations in Vercel. Apply to Staging/Prod via CI or from operator shell using `npm run migrate` against those DBs.
+5. Set domain(s): `yaaleepost.com` → Production; `staging.yaaleepost.com` → Develop.
+6. Sanity webhook points to Production revalidate route with `REVALIDATE_SECRET`.
+
+---
+
+## 17) Sanity ↔ App Data Boundaries
+
+* **Sanity**: editorial content (articles, bodies, media refs, authors, sections, tags), releases/comments, multi‑locale.
+* **Supabase**: auth (staff), profiles/roles, ad_campaigns, any operational analytics/aux tables.
+* **App**: fetch published content from Sanity for rendering; use Supabase for staff areas and ops features.
+
+---
+
+## 18) Testing & Go‑Live Checklist
+
+* Validate JSON‑LD via Google Rich Results Test (sample page URLs).
+* Check `/sitemap.xml`, `/news-sitemap.xml`, and `hreflang` meshes.
+* Lighthouse CWV on Home/Article/Section.
+* Ads load without layout shift.
+* Revalidation works (publish in Sanity → article updates live).
+* Trust pages linked in footer; `ads.txt` present.
+
+---
+
+## 19) Commands Recap (Dev)
+
+```
+# After packages installed
+npm run migrate        # applies /migrations/*.sql to Dev (via service-role URL)
+npm run dev            # run Next.js locally in Replit
+# Commit and push to GitHub from Replit UI
+```
+
+---
+
+### Notes
+
+* Keep **all schema/policy changes** in new migration files (`/migrations/002_*.sql`, etc.).
+* For Staging/Prod, apply migrations via CI or a controlled shell session; **do not** attach MCP to Production.
+* Add more indexes as usage patterns emerge (feeds, lookups, relations).
+* Implement per‑language metadata (titles/descriptions/OG) and `x-default`.
+
+---
+
+This single document is intended to be pasted into Replit to guide the agent through setup and implementation in one pass.

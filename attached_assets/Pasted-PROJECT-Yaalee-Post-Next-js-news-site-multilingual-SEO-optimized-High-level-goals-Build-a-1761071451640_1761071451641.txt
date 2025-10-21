@@ -1,0 +1,108 @@
+PROJECT: Yaalee Post (Next.js news site, multilingual, SEO-optimized)
+
+## High-level goals
+- Build a Next.js 14+ app (app router, TS, Tailwind) for a multilingual Ethiopian news site.
+- Editorial CMS: Sanity (Growth). Use Sanity Studio for article content, media handling, releases, comments, locales.
+- Operational DB: Supabase (Postgres) for users/profiles/roles, ad campaigns, and any non-editorial tables.
+- Keep SQL migrations in /migrations and a Node runner in /scripts/run-migrations.js.
+- SEO: JSON-LD (NewsArticle, Organization, Breadcrumb; VideoObject when embeds exist), robots, sitemap.xml + news-sitemap.xml (48h window), hreflang for EN/OM/AM, fast CWV.
+- Ads: in-article and header/footer slots with fixed sizes, lazy load.
+
+## 0) Repos, branches, CI
+- Initialize a TypeScript Next.js repo.
+- Add basic scripts: dev, build, start, lint, migrate.
+- Create branches: main (prod), develop (staging). Use feature branches per task.
+
+## 1) Packages to install
+Run:
+  npm i next react react-dom typescript zod tailwindcss postcss autoprefixer
+  npm i next-sitemap
+  npm i @sanity/client next-sanity @portabletext/react
+  npm i @supabase/supabase-js pg glob
+  npm i @vercel/analytics
+  npm i class-variance-authority lucide-react
+  npm i -D eslint prettier
+
+Initialize Tailwind.
+
+## 2) Configure Supabase MCP (FULL READ/WRITE on DEV)
+- Start an MCP client session in this Replit and attach the remote server:
+  SERVER URL: https://mcp.supabase.com/mcp
+- When prompted in browser: log into Supabase, choose the organization and **the DEV project** we will use.
+- Do NOT set read_only; we need **write** to create schema/policies.
+- Confirm project scoping is active so actions only affect this Dev project.
+
+(Reference: Supabase MCP docs describe OAuth login and scoping the server to an existing project.) 
+
+## 3) Create DB schema via MCP → SQL migrations
+- Create folder /migrations and file 001_init.sql with:
+  - tables: profiles (user roles), authors, sections, media_assets, articles, article_translations (lang-specific title/summary/body/slug), article_authors (multi-byline), tags, article_tags, article_revisions, ad_campaigns
+  - RLS: public can read only published articles + their translations; authenticated staff (writer/editor/admin) can write; public can read sections/tags/media
+  - helper view public.me mapping auth.uid() to profiles.role
+
+- Create /scripts/run-migrations.js (transactional, idempotent). 
+- Add npm script "migrate": "node scripts/run-migrations.js"
+- Using MCP (Supabase SQL tool), apply 001_init.sql to Dev. Also write the file to /migrations and commit.
+
+## 4) Sanity (Growth) setup
+- Create a Sanity project, enable Growth plan. Enable locales: en, om, am.
+- Add /sanity.config.ts and a /schemas/ folder with:
+  - document: article (title, slug, section, authors[], hero image, publish/updated timestamps, status)
+  - object: articleBody (portable text); translation fields per locale or use Sanity’s internationalization plugin/workflow
+  - document: author (name, slug, bio, headshot, socials)
+  - document: section, tag, media if needed
+- Configure image pipeline via the Sanity image plugin.
+- Add Sanity Studio under /app/studio/route (embedded studio) or separate subdomain.
+- Generate minimal GROQ queries & helpers under /lib/sanity.ts.
+
+## 5) Data boundaries (Sanity vs Supabase)
+- Editorial content (articles, bodies, media refs, authors): in Sanity.
+- Ops/user/ads data (profiles/roles, ad_campaigns): in Supabase.
+- For published pages, fetch from Sanity; for auth-gated ops (dashboards, admin), use Supabase.
+
+## 6) Next.js structure
+- app/(site)/[lang]/layout.tsx: EN default; subpaths /en, /om, /am; add alternates.hreflang incl. x-default.
+- app/(site)/[lang]/(routes): 
+  - / : Home with lead story, latest, sections.
+  - /news/[slug]: Article page; render body via PortableText; show authors, dateline, timestamps.
+  - /section/[slug], /tag/[slug], /author/[slug].
+- JSON-LD injector component for NewsArticle/Organization/Breadcrumb (+ VideoObject when YouTube embeds exist).
+- News sitemap: app/news-sitemap.xml/route.ts – includes only last 48h articles (<= 1000 URLs).
+- Standard sitemap & robots via next-sitemap.
+
+## 7) Ads & performance
+- Components for header (970x250/728x90 desktop; 320x100 mobile) and in-article (300x250/336x280) with fixed min-height containers to avoid CLS.
+- Lazy load ad tags with IntersectionObserver.
+- next/image + Cloudinary loader or Vercel Images; preconnect to image and ad domains.
+
+## 8) Auth & roles
+- Supabase Auth for staff; profiles table maps role (contributor|writer|editor|admin).
+- Admin-only Studio access (Sanity roles) and gated admin routes on the app side.
+
+## 9) Analytics & monitoring
+- GA4 + @vercel/analytics
+- (Optional) Sentry + uptime ping.
+
+## 10) Vercel deploy
+- Add vercel.json if needed.
+- Build: `next build`; Node >=18.
+- Set env vars in Vercel: SANITY tokens, SUPABASE URL + ANON, (Service Role only for server routes), CLOUDINARY, GA.
+- Webhooks: on Sanity publish/update → call revalidate route (tag-based).
+
+## 11) Deliverables to produce in this repo
+- /migrations/001_init.sql with schema + RLS
+- /scripts/run-migrations.js (transactional, idempotent)
+- /lib/sanity.ts (client + GROQ helpers)
+- /lib/seo.ts (JSON-LD builders for NewsArticle/VideoObject/Organization)
+- /app/news-sitemap.xml/route.ts (48h window)
+- /app/(site)/[lang]/… page templates
+- /components/AdSlot.tsx with CLS-safe wrappers
+- next-sitemap config + robots.txt
+- README with setup & deployment steps
+
+## 12) Testing checklist
+- Validate JSON-LD for a sample article.
+- Validate robots, sitemap.xml, news-sitemap.xml.
+- Confirm hreflang links are correct across EN/OM/AM.
+- Lighthouse CWV checks (LCP/INP/CLS).
+- Confirm ad slots do not shift layout.

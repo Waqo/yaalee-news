@@ -1,0 +1,80 @@
+PROJECT: Yaalee Post — Multilingual Ethiopian news site (Next.js + Sanity Growth + Supabase + Vercel)
+
+GOALS
+- Next.js 14+ (App Router, TS, Tailwind). Languages: EN (default), OM, AM → routes /[lang]/...
+- Editorial CMS: Sanity (Growth). Content: articles, authors, sections, tags, images, releases/comments.
+- Ops DB: Supabase (Postgres) for users/profiles/roles, ad_campaigns, and future ops data.
+- Keep SQL migrations under /migrations and apply them via a Node runner. Use Supabase MCP (DEV) with write access to create schema/RLS.
+- World-class SEO: JSON-LD (NewsArticle/VideoObject/Organization/Breadcrumb), `hreflang`, canonical, robots, standard sitemap + News sitemap (48h window).
+- Ads: GAM/AdSense-ready slots with **fixed min-heights** + lazy-loading (CLS safe).
+- Revalidation: Sanity → webhook → Next.js route to tag-revalidate on Vercel.
+
+STACK & PACKAGES
+Run:
+  npm i next react react-dom typescript zod tailwindcss postcss autoprefixer
+  npx tailwindcss init -p
+  npm i next-sitemap
+  npm i @sanity/client next-sanity @portabletext/react
+  npm i @supabase/supabase-js pg glob
+  npm i @vercel/analytics
+  npm i class-variance-authority lucide-react
+  npm i -D eslint prettier
+
+REPO STRUCTURE (create)
+- /app
+- /components
+- /lib
+- /public
+- /styles (include tailwind.css)
+- /migrations
+- /scripts/run-migrations.js
+- sanity.config.ts
+- next-sitemap.config.js
+- .env.local (dev), and document required env vars in README
+
+SUPABASE MCP (FULL READ/WRITE ON DEV)
+1) Start an MCP client session in this Replit and attach:
+   SERVER URL: https://mcp.supabase.com/mcp
+2) When browser opens: sign in to Supabase → select the **DEV project** for Yaalee Post.
+3) Keep **read_only = false** (we need writes). Confirm scoping to that single project.
+4) Store the project ref and database URL in secrets for use by the migration runner.
+
+SECRETS TO REQUEST/SET (dev)
+- NEXT_PUBLIC_SANITY_PROJECT_ID
+- SANITY_API_DATASET (e.g., production)
+- SANITY_API_READ_TOKEN
+- SANITY_API_WRITE_TOKEN (for Studio inside app if needed)
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_DB_URL_SERVICE_ROLE (server-only connection string for migrations)
+- GA4_MEASUREMENT_ID (optional)
+- CLOUDINARY_URL (or use Vercel Images)
+- REVALIDATE_SECRET (shared secret for revalidation route)
+Note: service-role key is server-only; never expose in client.
+
+DB SCHEMA & MIGRATIONS (create /migrations/001_init.sql)
+- Tables: profiles (user_id, full_name, role), authors, sections, media_assets, articles, article_translations, article_authors, tags, article_tags, article_revisions, ad_campaigns.
+- RLS:
+  • Public can SELECT only published articles + their translations.
+  • Public can SELECT sections, tags, media.
+  • Authenticated staff (writer/editor/admin) can INSERT/UPDATE/DELETE as appropriate.
+- Helper view: public.me mapping auth.uid() → profiles.role.
+- Useful indexes:
+  • articles(published_at desc) for feeds
+  • article_translations(lang, slug) unique
+  • article_authors(article_id, ord)
+- Seed:
+  • sections: news, business, tech, culture, opinion, explainers
+  • tags: starter set (technology, economy, politics, regions…)
+  • (Document in README how to insert first admin profile via Studio once you sign in.)
+Write the SQL into /migrations/001_init.sql and apply it to DEV via MCP (SQL tool). Commit the file.
+
+MIGRATION RUNNER (create /scripts/run-migrations.js)
+- Node script that:
+  • Ensures a _migrations table
+  • Runs each .sql inside a transaction
+  • Records filename → prevents double-apply
+- Add npm script: "migrate": "node scripts/run-migrations.js"
+- Run `npm run migrate` (should be a no-op after MCP apply).
+
+SANITY (Gro
