@@ -1,6 +1,8 @@
-const fs = require('fs');
-const { Client } = require('pg');
-const glob = require('glob');
+import fs from 'fs';
+import pg from 'pg';
+import { glob } from 'glob';
+
+const { Client } = pg;
 
 const url = process.env.SUPABASE_DB_URL_SERVICE_ROLE;
 if (!url) {
@@ -19,7 +21,9 @@ if (!url) {
       executed_at timestamptz not null default now()
     );`);
 
-  const files = glob.sync('migrations/*.sql').sort();
+  const files = await glob('migrations/*.sql');
+  files.sort();
+  
   for (const file of files) {
     const done = await client.query('select 1 from _migrations where filename=$1', [file]);
     if (done.rowCount) { console.log('Already applied:', file); continue; }
