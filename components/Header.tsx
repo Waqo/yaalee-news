@@ -34,18 +34,18 @@ export function Header({ lang }: { lang: Language }) {
   });
 
   return (
-    <header className="bg-background" data-testid="header-main">
+    <header className="sticky top-0 z-50 bg-background" data-testid="header-main">
       {/* Top Banner */}
-      <div className="bg-foreground text-background">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-2.5 text-sm">
+      <div className="bg-foreground text-background h-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 h-full">
+          <div className="flex items-center justify-between h-full text-sm">
             <div className="flex items-center gap-2">
               <span className="hidden md:inline">Exclusive insights, data, and analysis for financial market experts.</span>
-              <span className="md:hidden">📰 Stay updated with latest news</span>
+              <span className="md:hidden">Stay updated with latest news</span>
             </div>
             <Link 
               href={`/${lang}/subscribe`}
-              className="bg-[#ff6b35] hover:bg-[#ff8555] text-white px-4 py-1.5 rounded text-xs font-medium transition-colors whitespace-nowrap"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-1.5 rounded text-xs font-medium transition-colors whitespace-nowrap"
             >
               Explore Now
             </Link>
@@ -54,9 +54,9 @@ export function Header({ lang }: { lang: Language }) {
       </div>
 
       {/* Main Header */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
+      <div className="border-b border-border h-20 md:h-24">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 h-full">
+          <div className="flex items-center justify-between h-full">
             {/* Logo */}
             <Link href={`/${lang}`} className="inline-block transition-opacity hover:opacity-80" data-testid="link-home">
               <Image 
@@ -69,25 +69,26 @@ export function Header({ lang }: { lang: Language }) {
               />
             </Link>
 
-            {/* Main Navigation */}
-            <nav className="hidden lg:flex items-center gap-8" data-testid="nav-primary">
-              {mainNavigation.map(item => (
-                <Link
-                  key={item.slug}
-                  href={item.slug ? `/${lang}/section/${item.slug}` : `/${lang}`}
-                  className="text-sm font-medium hover:text-primary transition-colors"
-                >
-                  {item.name}
-                </Link>
-              ))}
-              <div className="relative group">
-                <button className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
-                  Pages
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
+                {/* Main Navigation */}
+                <nav className="hidden lg:flex items-center gap-8" data-testid="nav-primary">
+                  {mainNavigation.map(item => (
+                    <Link
+                      key={item.slug}
+                      href={item.slug ? `/${lang}/section/${item.slug}` : `/${lang}`}
+                      className="text-sm font-semibold uppercase tracking-wide hover:text-primary transition-colors"
+                      style={{ letterSpacing: '0.05em' }}
+                    >
+                      {item.name}
+                    </Link>
+                  ))}
+                  <div className="relative group">
+                    <button className="text-sm font-semibold uppercase tracking-wide hover:text-primary transition-colors flex items-center gap-1" style={{ letterSpacing: '0.05em' }}>
+                      Pages
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
             </nav>
 
             {/* Right Actions */}
@@ -110,21 +111,21 @@ export function Header({ lang }: { lang: Language }) {
                 ))}
               </div>
 
-              <Link
-                href={`/${lang}/my-news`}
-                className="hidden md:inline-flex bg-foreground text-background px-4 py-2 rounded text-sm font-medium hover:bg-foreground/90 transition-colors"
-              >
-                My News
-              </Link>
-              <button className="p-2 hover:bg-accent rounded-full transition-colors">
-                <User className="w-5 h-5" />
-              </button>
-              <button className="p-2 hover:bg-accent rounded-full transition-colors">
-                <Search className="w-5 h-5" />
-              </button>
-              <button className="p-2 hover:bg-accent rounded-full transition-colors">
-                <Moon className="w-5 h-5" />
-              </button>
+                  <Link
+                    href={`/${lang}/my-news`}
+                    className="hidden md:inline-flex bg-foreground text-background px-4 py-2 rounded text-sm font-semibold hover:bg-foreground/90 transition-colors"
+                  >
+                    My News
+                  </Link>
+                  <button className="p-2 hover:bg-muted rounded-full transition-colors" aria-label="User Profile">
+                    <User className="w-5 h-5" />
+                  </button>
+                  <button className="p-2 hover:bg-muted rounded-full transition-colors" aria-label="Search">
+                    <Search className="w-5 h-5" />
+                  </button>
+                  <button className="p-2 hover:bg-muted rounded-full transition-colors" aria-label="Toggle Dark Mode">
+                    <Moon className="w-5 h-5" />
+                  </button>
             </div>
           </div>
         </div>

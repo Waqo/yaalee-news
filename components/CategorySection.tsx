@@ -12,12 +12,14 @@ export function CategorySection({ title, slug, articles, lang }: CategorySection
   if (articles.length === 0) return null;
 
   return (
-    <section className="mb-16">
+    <section className="py-12 md:py-16 border-t border-border" data-testid={`section-${slug}`} aria-labelledby={`section-heading-${slug}`}>
       <div className="flex items-center justify-between mb-8">
-        <h2 className="font-serif font-bold text-3xl md:text-4xl">{title}</h2>
+        <h2 id={`section-heading-${slug}`} className="text-hero">
+          {title}
+        </h2>
         <Link
           href={`/${lang}/section/${slug}`}
-          className="text-sm font-semibold text-primary hover:underline"
+          className="text-primary hover:underline font-semibold text-sm transition-colors duration-200"
         >
           View All →
         </Link>
