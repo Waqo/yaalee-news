@@ -61,7 +61,7 @@ export function ArticleCard({
     return (
       <Link
         href={href}
-        className="group block bg-card hover:shadow-md transition-all duration-300 rounded overflow-hidden"
+        className="group block bg-card article-hover rounded overflow-hidden"
         data-testid={`card-article-${slug}`}
       >
         <div className="md:flex md:gap-6">
@@ -79,7 +79,7 @@ export function ArticleCard({
           )}
           <div className="p-6 md:w-1/2 md:flex md:flex-col md:justify-center">
             {section && (
-              <span className="text-xs font-bold text-primary uppercase tracking-wide">
+              <span className="category-badge">
                 {section.name}
               </span>
             )}
@@ -103,7 +103,7 @@ export function ArticleCard({
   return (
     <Link
       href={href}
-      className="group block bg-card hover:shadow-md transition-shadow rounded overflow-hidden"
+      className="group block bg-card article-hover rounded overflow-hidden"
       data-testid={`card-article-${slug}`}
     >
       {featuredImage && (
@@ -119,7 +119,7 @@ export function ArticleCard({
       )}
       <div className="p-4">
         {section && (
-          <span className="text-xs font-bold text-primary uppercase tracking-wide">
+          <span className="category-badge">
             {section.name}
           </span>
         )}

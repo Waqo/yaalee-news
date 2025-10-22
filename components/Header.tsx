@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { languages, type Language } from '@/lib/utils';
 
 const sections = [
@@ -47,24 +48,22 @@ export function Header({ lang }: { lang: Language }) {
 
       {/* Logo and Brand */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6">
-        <Link href={`/${lang}`} className="flex items-center gap-3 group" data-testid="link-home">
-          <svg className="w-12 h-12 md:w-16 md:h-16 text-primary transition-transform group-hover:scale-105" viewBox="0 0 200 200" fill="none">
-            {/* Fountain Pen Icon */}
-            <path d="M100 20L120 80L100 140L80 80L100 20Z" fill="currentColor"/>
-            <circle cx="100" cy="90" r="8" fill="white"/>
-            <rect x="95" y="140" width="10" height="30" fill="currentColor"/>
-            <path d="M70 160C70 160 85 175 100 175C115 175 130 160 130 160" stroke="currentColor" strokeWidth="4" fill="none"/>
-          </svg>
-          <h1 className="font-bold text-4xl md:text-5xl text-foreground">
-            Yaalee Post
-          </h1>
+        <Link href={`/${lang}`} className="inline-block transition-opacity hover:opacity-80" data-testid="link-home">
+          <Image 
+            src="/yaalee-logo.png" 
+            alt="Yaalee Post" 
+            width={263} 
+            height={87}
+            priority
+            className="h-auto w-auto"
+          />
         </Link>
       </div>
 
       {/* Navigation */}
       <nav className="bg-background border-t border-border" data-testid="nav-primary">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="flex items-center gap-8 py-3 overflow-x-auto">
+          <div className="flex items-center gap-8 py-3 overflow-x-auto scrollbar-hide">
             {sections.map(section => (
               <Link
                 key={section.slug}
