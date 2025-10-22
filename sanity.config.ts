@@ -1,8 +1,9 @@
 import { defineConfig } from 'sanity';
-import { deskTool } from 'sanity/desk';
+import { structureTool } from 'sanity/structure';
+import { visionTool } from '@sanity/vision';
 import { schemaTypes } from './sanity/schemas';
 
-const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!;
+const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || '0hjxglhl';
 const dataset = process.env.SANITY_API_DATASET || 'production';
 
 export default defineConfig({
@@ -10,7 +11,11 @@ export default defineConfig({
   title: 'Yaalee Post CMS',
   projectId,
   dataset,
-  plugins: [deskTool()],
+  basePath: '/admin',
+  plugins: [
+    structureTool(),
+    visionTool(),
+  ],
   schema: {
     types: schemaTypes,
   },
