@@ -2,40 +2,42 @@ import Link from 'next/link';
 import { languages, type Language } from '@/lib/utils';
 
 const sections = [
-  { slug: 'world', name: 'World' },
   { slug: 'business', name: 'Business' },
-  { slug: 'finance', name: 'Finance' },
-  { slug: 'politics', name: 'Politics' },
-  { slug: 'technology', name: 'Technology' },
-  { slug: 'environment', name: 'Environment' },
+  { slug: 'culture', name: 'Culture' },
+  { slug: 'explainers', name: 'Explainers' },
+  { slug: 'news', name: 'News' },
+  { slug: 'opinion', name: 'Opinion' },
+  { slug: 'tech', name: 'Tech' },
 ];
 
 export function Header({ lang }: { lang: Language }) {
+  const today = new Date().toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric' 
+  });
+
   return (
-    <header className="sticky top-0 z-50 bg-background shadow-sm" data-testid="header-main">
-      {/* Top Bar */}
-      <div className="bg-primary text-primary-foreground py-2">
+    <header className="bg-background border-b border-border" data-testid="header-main">
+      {/* Top Bar with Date and Languages */}
+      <div className="border-b border-border">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-4">
-              <span className="font-medium">Breaking News</span>
-              <div className="hidden md:block text-xs opacity-90">
-                Stay updated with the latest news from Ethiopia and beyond
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between py-2 text-sm">
+            <div className="text-muted-foreground">{today}</div>
+            <div className="flex items-center gap-1">
               {Object.entries(languages).map(([code, { nativeName }]) => (
                 <Link
                   key={code}
                   href={`/${code}`}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${
+                  className={`px-3 py-1 rounded transition-colors text-xs font-medium uppercase ${
                     code === lang
-                      ? 'bg-white/20 font-semibold'
-                      : 'hover:bg-white/10'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'hover:bg-accent'
                   }`}
                   data-testid={`link-lang-${code}`}
                 >
-                  {code.toUpperCase()}
+                  {code}
                 </Link>
               ))}
             </div>
@@ -43,70 +45,36 @@ export function Header({ lang }: { lang: Language }) {
         </div>
       </div>
 
-      {/* Main Header */}
-      <div className="bg-background border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <Link href={`/${lang}`} className="flex items-center" data-testid="link-home">
-              <h1 className="font-serif font-bold text-3xl md:text-4xl text-primary hover:opacity-80 transition-opacity">
-                Yaalee Post
-              </h1>
-            </Link>
-
-            <div className="flex items-center gap-4">
-              <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-accent rounded-md hover:bg-accent/80 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <span className="text-sm">Search</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Logo and Brand */}
+      <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 py-6">
+        <Link href={`/${lang}`} className="flex items-center gap-3 group" data-testid="link-home">
+          <svg className="w-12 h-12 md:w-16 md:h-16 text-primary transition-transform group-hover:scale-105" viewBox="0 0 200 200" fill="none">
+            {/* Fountain Pen Icon */}
+            <path d="M100 20L120 80L100 140L80 80L100 20Z" fill="currentColor"/>
+            <circle cx="100" cy="90" r="8" fill="white"/>
+            <rect x="95" y="140" width="10" height="30" fill="currentColor"/>
+            <path d="M70 160C70 160 85 175 100 175C115 175 130 160 130 160" stroke="currentColor" strokeWidth="4" fill="none"/>
+          </svg>
+          <h1 className="font-bold text-4xl md:text-5xl text-foreground">
+            Yaalee Post
+          </h1>
+        </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="bg-background border-b border-border" data-testid="nav-primary">
+      <nav className="bg-background border-t border-border" data-testid="nav-primary">
         <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8">
-          <div className="hidden md:flex items-center gap-8 py-3">
-            <Link
-              href={`/${lang}`}
-              className="text-sm font-semibold hover:text-primary transition-colors"
-            >
-              Home
-            </Link>
+          <div className="flex items-center gap-8 py-3 overflow-x-auto">
             {sections.map(section => (
               <Link
                 key={section.slug}
                 href={`/${lang}/section/${section.slug}`}
-                className="text-sm font-medium hover:text-primary transition-colors"
+                className="text-sm font-medium whitespace-nowrap hover:text-primary transition-colors"
                 data-testid={`link-section-${section.slug}`}
               >
                 {section.name}
               </Link>
             ))}
-          </div>
-
-          {/* Mobile Navigation */}
-          <div className="md:hidden overflow-x-auto">
-            <div className="flex gap-6 px-2 py-3">
-              <Link
-                href={`/${lang}`}
-                className="text-sm font-semibold whitespace-nowrap hover:text-primary transition-colors"
-              >
-                Home
-              </Link>
-              {sections.map(section => (
-                <Link
-                  key={section.slug}
-                  href={`/${lang}/section/${section.slug}`}
-                  className="text-sm font-medium whitespace-nowrap hover:text-primary transition-colors"
-                  data-testid={`link-section-mobile-${section.slug}`}
-                >
-                  {section.name}
-                </Link>
-              ))}
-            </div>
           </div>
         </div>
       </nav>
