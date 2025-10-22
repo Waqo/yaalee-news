@@ -13,16 +13,16 @@ const mainNavigation = [
 ];
 
 const secondaryNavigation = [
-  { slug: 'opinion', name: 'Opinion', icon: '📝' },
-  { slug: 'education', name: 'Education', icon: '📚' },
-  { slug: 'global-affairs', name: 'Global Affairs', icon: '🌍' },
-  { slug: 'featured', name: 'Featured', icon: '⭐' },
-  { slug: 'renewable-energy', name: 'Renewable Energy', icon: '♻️' },
-  { slug: 'climate-change', name: 'Climate Change', icon: '🌡️' },
-  { slug: 'hot', name: 'Hot', icon: '🔥' },
-  { slug: 'politics', name: 'Politics', icon: '⚖️' },
-  { slug: 'research', name: 'Research', icon: '🔬' },
-  { slug: 'health', name: 'Health', icon: '💊' },
+  { slug: 'opinion', name: 'Opinion' },
+  { slug: 'education', name: 'Education' },
+  { slug: 'global-affairs', name: 'Global Affairs' },
+  { slug: 'featured', name: 'Featured' },
+  { slug: 'renewable-energy', name: 'Renewable Energy' },
+  { slug: 'climate-change', name: 'Climate Change' },
+  { slug: 'hot', name: 'Hot' },
+  { slug: 'politics', name: 'Politics' },
+  { slug: 'research', name: 'Research' },
+  { slug: 'health', name: 'Health' },
 ];
 
 export function Header({ lang }: { lang: Language }) {
@@ -139,11 +139,10 @@ export function Header({ lang }: { lang: Language }) {
                 <Link
                   key={item.slug}
                   href={`/${lang}/section/${item.slug}`}
-                  className="flex items-center gap-1.5 text-sm whitespace-nowrap hover:text-primary transition-colors"
+                  className="text-sm whitespace-nowrap hover:text-primary transition-colors"
                   data-testid={`link-category-${item.slug}`}
                 >
-                  <span>{item.icon}</span>
-                  <span>{item.name}</span>
+                  {item.name}
                 </Link>
               ))}
             </div>
